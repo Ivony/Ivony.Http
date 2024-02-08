@@ -13,12 +13,13 @@ builder.ConfigureServices( services =>
 
   services.AddLogging();
   services.AddHttpLogging( options => options.LoggingFields = Microsoft.AspNetCore.HttpLogging.HttpLoggingFields.All );
-
+  services.AddSingleton<HttpProxy>();
 
 } );
 builder.Configure( builder =>
 {
 
+  builder.UseMiddleware<HttpProxy>();
   builder.UseHttpLogging();
 
 
