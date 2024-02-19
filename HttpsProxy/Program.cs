@@ -1,4 +1,4 @@
-﻿using System.Net;
+﻿using Ivony.Http;
 
 using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Builder;
@@ -7,7 +7,29 @@ using Microsoft.Extensions.DependencyInjection;
 
 var builder = WebHost.CreateDefaultBuilder();
 
-builder.UseKestrel( kestrel => kestrel.ListenLocalhost( 5000, options => options.UseConnectionLogging() ) );
+builder.UseKestrel( kestrel => kestrel.ListenLocalhost( 5000, options =>
+{
+  options.UseConnectionLogging();
+  options.Use( continuation => async context =>
+  {
+
+    var reader = new HttpReader( context.Transport.Input );
+    var line = await reader.TryReadLine();
+    if ( line != null )
+    {
+
+      var request = new HttpRequestLine( line );
+      if ( request.IsMethod( HttpMethod.Connect ) )
+        await HttpProxy.ProcessConnection( context );
+
+      return;
+
+    }
+    await continuation( context );
+  } );
+} ) );
+
+
 builder.ConfigureServices( services =>
 {
 
