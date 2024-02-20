@@ -14,7 +14,7 @@ builder.UseKestrel( kestrel => kestrel.ListenLocalhost( 5000, options =>
   {
 
     var reader = new HttpReader( context.Transport.Input );
-    var line = await reader.TryReadLine();
+    var line = await reader.ReadLine();
     if ( line != null )
     {
 

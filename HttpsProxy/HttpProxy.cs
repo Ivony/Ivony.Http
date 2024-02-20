@@ -1,10 +1,12 @@
-﻿using Microsoft.AspNetCore.Connections;
+﻿using Ivony.Http;
+
+using Microsoft.AspNetCore.Connections;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Server.Kestrel.Core.Internal.Http;
 using Microsoft.Extensions.Logging;
 
-internal class HttpProxy : IMiddleware
+internal class HttpProxy
 {
   private readonly ILogger<HttpProxy> _logger;
 
@@ -16,25 +18,7 @@ internal class HttpProxy : IMiddleware
   public static async Task ProcessConnection( ConnectionContext context )
   {
 
-  }
-
-  public async Task InvokeAsync( HttpContext context, RequestDelegate next )
-  {
-
-    var request = context.Features.Get<IHttpRequestFeature>()!;
-    if ( string.Equals( request.Method, "CONNECT", StringComparison.OrdinalIgnoreCase ) )
-    {
-
-      
-
-      var connect = context.Features.Get<IHttpExtendedConnectFeature>()!;
-      _logger.LogInformation( "CONNECT" );
-      var stream = await connect.AcceptAsync();
-
-
-      stream.Dispose();
-
-    }
+    var reader = new HttpReader( context.Transport.Input );
 
 
   }

@@ -1,31 +1,40 @@
 ﻿using System.Buffers;
 using System.Diagnostics.CodeAnalysis;
 using System.IO.Pipelines;
-using System.Net.Http.Headers;
 using System.Text;
 
 namespace Ivony.Http;
-public class HttpReader
+
+
+/// <summary>
+/// 定义一个 HTTP 流读取器
+/// </summary>
+/// <param name="HttpPipeReader">获取读取 Http 请求流的 PipeReader 对象</param>
+/// <param name="AutoAdvance">指示该读取器是否会在每读取一行之后自动提交偏移量给 <see cref="HttpPipeReader"/> ，若此属性为 <see langword="false"/> ，则需要自行调用 <see cref="Advance"/> 方法。</param>
+public class HttpReader( PipeReader HttpPipeReader, bool AutoAdvance = false )
 {
 
-
-  private static byte CR = (byte) '\r';
-  private static byte LF = (byte) '\n';
-
+  private static readonly byte CR = (byte) '\r';
+  private static readonly byte LF = (byte) '\n';
 
 
-  public HttpReader( PipeReader reader )
-  {
-    HttpPipeReader = reader;
-  }
-
-  public PipeReader HttpPipeReader { get; }
+  private SequencePosition offset;
 
 
 
+  /// <summary>
+  /// 指示当前读取器的状态
+  /// </summary>
   public HttpReaderState ReaderState { get; private set; }
 
 
+  /// <summary>
+  /// 读取 HTTP 请求行
+  /// </summary>
+  /// <param name="cancellationToken">取消标志</param>
+  /// <returns>HTTP 请求行</returns>
+  /// <exception cref="InvalidOperationException">当前位置不是合法的 HTTP 请求行的位置</exception>
+  /// <exception cref="FormatException">HTTP 请求行内容格式不正确</exception>
   public async ValueTask<HttpRequestLine> ReadHttpRequestLine( CancellationToken cancellationToken = default )
   {
 
@@ -33,7 +42,7 @@ public class HttpReader
     if ( ReaderState != HttpReaderState.NotStarted )
       throw new InvalidOperationException();
 
-    var line = await TryReadLine( true, cancellationToken );
+    var line = await ReadLine( cancellationToken );
     if ( line == null )
       throw new FormatException();
 
@@ -41,12 +50,19 @@ public class HttpReader
     return new HttpRequestLine( line );
   }
 
-  public async ValueTask<HttpHeaderLine?> TryReadHttpHeaderLine( CancellationToken cancellationToken = default )
+  /// <summary>
+  /// 读取 HTTP 头部行
+  /// </summary>
+  /// <param name="cancellationToken">取消标志</param>
+  /// <returns>HTTP 头部行，如果已经读取到头部末尾，则返回 null。</returns>
+  /// <exception cref="InvalidOperationException">当前位置不是合法的 HTTP 头部行的位置</exception>
+  /// <exception cref="FormatException">HTTP 内容格式不正确</exception>
+  public async ValueTask<HttpHeaderLine?> ReadHttpHeaderLine( CancellationToken cancellationToken = default )
   {
     if ( ReaderState != HttpReaderState.Headers )
       throw new InvalidOperationException();
 
-    var line = await TryReadLine( true, cancellationToken );
+    var line = await ReadLine( cancellationToken );
     if ( line == null )
       throw new FormatException();
 
@@ -68,7 +84,7 @@ public class HttpReader
     while ( true )
     {
       cancellationToken.ThrowIfCancellationRequested();
-      var header = await TryReadHttpHeaderLine( cancellationToken );
+      var header = await ReadHttpHeaderLine( cancellationToken );
       if ( header == null )
         break;
       else
@@ -78,31 +94,59 @@ public class HttpReader
     return list.AsReadOnly();
   }
 
-  public async ValueTask<string?> TryReadLine( bool advance = true, CancellationToken cancellationToken = default )
+  /// <summary>
+  /// 尝试从 HTTP 请求中读取一行数据
+  /// </summary>
+  /// <param name="cancellationToken">取消标志</param>
+  /// <returns>读取到的行数据，如果已经读取到末尾，则返回 null。</returns>
+  public async ValueTask<string?> ReadLine( CancellationToken cancellationToken = default )
   {
     while ( true )
     {
       var result = await HttpPipeReader.ReadAsync( cancellationToken );
       var buffer = result.Buffer;
 
-      if ( TryReadLine( buffer, out var line ) )
+      if ( TryReadLine( buffer.Slice( offset ), out var line, out offset ) )
+      {
+        if ( AutoAdvance )
+          Advance();
+
         return line;
+      }
 
       if ( result.IsCompleted )
         return null;
     }
   }
 
-  public static bool TryReadLine( ReadOnlySequence<byte> buffer, [NotNullWhen( true )] out string? line )
+
+
+  /// <summary>
+  /// 将当前读取偏移量提交给 <see cref="HttpPipeReader"/> 。
+  /// </summary>
+  public void Advance()
+  {
+    HttpPipeReader.AdvanceTo( offset );
+  }
+
+
+  /// <summary>
+  /// 尝试从缓冲中读取一行数据
+  /// </summary>
+  /// <param name="buffer">要读取的缓冲区</param>
+  /// <param name="line">读取到的数据行</param>
+  /// <returns>是否读取成功</returns>
+  public static bool TryReadLine( ReadOnlySequence<byte> buffer, [NotNullWhen( true )] out string? line, out SequencePosition offset )
   {
     line = null;
+    offset = buffer.Start;
 
     var reader = new SequenceReader<byte>( buffer );
-    if ( reader.TryReadTo( out ReadOnlySequence<byte> result, CR, LF ) == false )
+    if ( reader.TryReadTo( out ReadOnlySequence<byte> result, CR, LF, false ) == false )
       return false;
 
     line = Encoding.ASCII.GetString( result );
+    offset = result.End;
     return true;
   }
-
 }
