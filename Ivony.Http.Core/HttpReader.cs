@@ -108,7 +108,8 @@ public class HttpReader( PipeReader HttpPipeReader, bool AutoAdvance = false )
 
       if ( TryReadLine( buffer.Slice( offset ), out var line, out offset ) )
       {
-        Commit();
+        if ( AutoAdvance )
+          Commit();
         return line;
       }
 
@@ -142,12 +143,13 @@ public class HttpReader( PipeReader HttpPipeReader, bool AutoAdvance = false )
     line = null;
     offset = buffer.Start;
 
+
     var reader = new SequenceReader<byte>( buffer );
-    if ( reader.TryReadTo( out ReadOnlySequence<byte> result, CR, LF, false ) == false )
+    if ( reader.TryReadTo( out ReadOnlySequence<byte> result, CR, LF ) == false )
       return false;
 
     line = Encoding.ASCII.GetString( result );
-    offset = result.End;
+    offset = buffer.GetPosition( buffer.GetOffset( result.End ) + 2 );
     return true;
   }
 

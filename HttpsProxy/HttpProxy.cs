@@ -1,4 +1,6 @@
-﻿using Ivony.Http;
+﻿using System.Text;
+
+using Ivony.Http;
 
 using Microsoft.AspNetCore.Connections;
 using Microsoft.Extensions.Logging;
@@ -16,7 +18,7 @@ internal class HttpProxy
 
   internal async ValueTask<bool> TryHandleConnection( ConnectionContext context )
   {
-    var reader = new HttpReader( context.Transport.Input );
+    var reader = new HttpReader( context.Transport.Input, true );
     var request = await reader.ReadHttpRequestLine();
     if ( request.IsMethod( HttpMethod.Connect ) )
     {
@@ -40,7 +42,21 @@ internal class HttpProxy
   protected virtual async Task ConnectTo( ConnectionContext context, string path, IReadOnlyList<HttpHeaderLine> headers )
   {
 
-    var writer = new HttpResponseWriter( context.Transport.Output );
+    var writer = new HttpWriter( context.Transport.Output );
+    writer.WriteLine( HttpStatusLine.OK );
+    writer.WriteLine();
 
+
+    while ( true )
+    {
+      var result = await context.Transport.Input.ReadAsync();
+
+      if ( result.IsCompleted )
+        return;
+
+      Console.Write( Encoding.ASCII.GetString( result.Buffer ) );
+      context.Transport.Input.AdvanceTo( result.Buffer.End );
+
+    }
   }
 }
