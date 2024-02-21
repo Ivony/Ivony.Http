@@ -10,7 +10,7 @@ namespace Ivony.Http;
 /// 定义一个 HTTP 流读取器
 /// </summary>
 /// <param name="HttpPipeReader">获取读取 Http 请求流的 PipeReader 对象</param>
-/// <param name="AutoAdvance">指示该读取器是否会在每读取一行之后自动提交偏移量给 <see cref="HttpPipeReader"/> ，若此属性为 <see langword="false"/> ，则需要自行调用 <see cref="Advance"/> 方法。</param>
+/// <param name="AutoAdvance">指示该读取器是否会在每读取一行之后自动提交偏移量给 <see cref="HttpPipeReader"/> ，若此属性为 <see langword="false"/> ，则需要自行调用 <see cref="Commit"/> 方法。</param>
 public class HttpReader( PipeReader HttpPipeReader, bool AutoAdvance = false )
 {
 
@@ -108,11 +108,11 @@ public class HttpReader( PipeReader HttpPipeReader, bool AutoAdvance = false )
 
       if ( TryReadLine( buffer.Slice( offset ), out var line, out offset ) )
       {
-        if ( AutoAdvance )
-          Advance();
-
+        Commit();
         return line;
       }
+
+      HttpPipeReader.AdvanceTo( buffer.Start, buffer.End );
 
       if ( result.IsCompleted )
         return null;
@@ -124,10 +124,11 @@ public class HttpReader( PipeReader HttpPipeReader, bool AutoAdvance = false )
   /// <summary>
   /// 将当前读取偏移量提交给 <see cref="HttpPipeReader"/> 。
   /// </summary>
-  public void Advance()
+  public void Commit()
   {
     HttpPipeReader.AdvanceTo( offset );
   }
+
 
 
   /// <summary>
@@ -149,4 +150,28 @@ public class HttpReader( PipeReader HttpPipeReader, bool AutoAdvance = false )
     offset = result.End;
     return true;
   }
+
+
+  /// <summary>
+  /// 快进到请求的主体位置，
+  /// </summary>
+  /// <returns></returns>
+  public async ValueTask ForwardToBody( CancellationToken cancellationToken = default )
+  {
+    if ( ReaderState == HttpReaderState.NotStarted )
+      await ReadHttpRequestLine( cancellationToken );
+
+    if ( ReaderState == HttpReaderState.Headers )
+      while ( await ReadHttpHeaderLine( cancellationToken ) != null ) ;
+  }
+}
+
+public enum HttpReaderState
+{
+  /// <summary>尚未开始读取任何内容</summary>
+  NotStarted,
+  /// <summary>已经开始读取到头部</summary>
+  Headers,
+  /// <summary>已经开始读取到主体</summary>
+  Body,
 }

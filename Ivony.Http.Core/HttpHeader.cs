@@ -73,7 +73,7 @@ public readonly struct HttpRequestLine
   /// <summary>
   /// 请求路径
   /// </summary>
-  public ReadOnlySpan<char> Path => RawText.AsSpan( (delimiter1 + 1)..delimiter2 );
+  public ReadOnlySpan<char> PathAndQuery => RawText.AsSpan( (delimiter1 + 1)..delimiter2 );
 
   /// <summary>
   /// 请求版本
@@ -95,3 +95,6 @@ public class HttpHeaderLineCollection( IReadOnlyList<HttpHeaderLine> collection 
 
   IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 }
+
+
+
