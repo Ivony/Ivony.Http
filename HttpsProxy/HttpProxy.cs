@@ -1,4 +1,8 @@
-﻿using System.Text;
+﻿using System.IO.Pipelines;
+using System.Net.Sockets;
+using System.Reflection.Metadata.Ecma335;
+using System.Text;
+using System.Text.RegularExpressions;
 
 using Ivony.Http;
 
@@ -46,17 +50,39 @@ internal class HttpProxy
     writer.WriteLine( HttpStatusLine.OK );
     writer.WriteLine();
 
+    await writer.HttpPipeWriter.FlushAsync();
 
-    while ( true )
+
+    Console.WriteLine( $"CONNECT {path}" );
+
+    var stream = await ConnectTo( path );
+
+    Console.WriteLine( $"connected to {path}" );
+
+
+    var tunnel = new PipeTunnel( context.Transport, stream );
+    await tunnel.TransportAsync();
+  }
+
+
+  private Regex hostnameRegex = new Regex( @"(?<host>[\w\.\-]+)(:(?<port>[0-9]+))", RegexOptions.Singleline | RegexOptions.Compiled );
+
+  private async Task<Stream> ConnectTo( string path )
+  {
+    (string, int) ParseHost( string hostname )
     {
-      var result = await context.Transport.Input.ReadAsync();
+      var match = hostnameRegex.Match( hostname );
+      if ( match.Success == false )
+        throw new FormatException();
 
-      if ( result.IsCompleted )
-        return;
-
-      Console.Write( Encoding.ASCII.GetString( result.Buffer ) );
-      context.Transport.Input.AdvanceTo( result.Buffer.End );
-
+      return (match.Groups["host"].Value, int.Parse( match.Groups["port"].ValueSpan ));
     }
+
+    var (host, port) = ParseHost( path );
+
+    var client = new TcpClient();
+    await client.ConnectAsync( host, port );
+
+    return client.GetStream();
   }
 }

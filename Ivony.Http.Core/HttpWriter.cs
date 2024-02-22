@@ -5,7 +5,7 @@ using System.Text;
 namespace Ivony.Http;
 
 
-public class HttpWriter( PipeWriter HttpPipeWriter )
+public class HttpWriter( PipeWriter writer )
 {
 
 
@@ -16,13 +16,20 @@ public class HttpWriter( PipeWriter HttpPipeWriter )
 
 
   /// <summary>
+  /// 获取内部的 PipeWriter 对象
+  /// </summary>
+  public PipeWriter HttpPipeWriter => writer;
+
+
+
+  /// <summary>
   /// 向 HTTP 响应中写入一个空行
   /// </summary>
   public void WriteLine()
   {
-    var target = HttpPipeWriter.GetSpan( newline.Length );
+    var target = writer.GetSpan( newline.Length );
     newline.Span.CopyTo( target );
-    HttpPipeWriter.Advance( newline.Length );
+    writer.Advance( newline.Length );
   }
 
   /// <summary>
@@ -32,7 +39,7 @@ public class HttpWriter( PipeWriter HttpPipeWriter )
   /// <returns></returns>
   public void WriteLine( HttpStatusLine line )
   {
-    var target = HttpPipeWriter.GetSpan( line.Length + newline.Length );
+    var target = writer.GetSpan( line.Length + newline.Length );
     foreach ( var memory in line )
     {
       var length = Encoding.GetBytes( memory.Span, target );
@@ -41,7 +48,7 @@ public class HttpWriter( PipeWriter HttpPipeWriter )
 
     newline.Span.CopyTo( target );
 
-    HttpPipeWriter.Advance( line.Length + newline.Length );
+    writer.Advance( line.Length + newline.Length );
   }
 
   /// <summary>
@@ -53,11 +60,14 @@ public class HttpWriter( PipeWriter HttpPipeWriter )
   {
     encoding ??= Encoding.UTF8;
 
-    var buffer = HttpPipeWriter.GetSpan( line.Length + newline.Length );
+    var buffer = writer.GetSpan( line.Length + newline.Length );
     var count = encoding.GetBytes( line, buffer );
     newline.Span.CopyTo( buffer.Slice( count ) );
 
-    HttpPipeWriter.Advance( count + newline.Length );
+    writer.Advance( count + newline.Length );
   }
+
+
+  public ValueTask<FlushResult> FlushAsync() => writer.FlushAsync();
 
 }

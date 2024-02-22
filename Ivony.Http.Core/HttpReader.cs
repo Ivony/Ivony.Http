@@ -9,13 +9,17 @@ namespace Ivony.Http;
 /// <summary>
 /// 定义一个 HTTP 流读取器
 /// </summary>
-/// <param name="HttpPipeReader">获取读取 Http 请求流的 PipeReader 对象</param>
-/// <param name="AutoAdvance">指示该读取器是否会在每读取一行之后自动提交偏移量给 <see cref="HttpPipeReader"/> ，若此属性为 <see langword="false"/> ，则需要自行调用 <see cref="Commit"/> 方法。</param>
-public class HttpReader( PipeReader HttpPipeReader, bool AutoAdvance = false )
+/// <param name="reader">获取读取 Http 请求流的 PipeReader 对象</param>
+/// <param name="autoCommit">指示该读取器是否会在每读取一行之后自动提交偏移量给 <see cref="HttpPipeReader"/> ，若此属性为 <see langword="false"/> ，则需要自行调用 <see cref="Commit"/> 方法。</param>
+public class HttpReader( PipeReader reader, bool autoCommit = false )
 {
 
 
   private SequencePosition offset;
+
+  public PipeReader HttpPipeReader => reader;
+  
+  public bool AutoCommit => autoCommit;
 
 
 
@@ -100,17 +104,18 @@ public class HttpReader( PipeReader HttpPipeReader, bool AutoAdvance = false )
   {
     while ( true )
     {
-      var result = await HttpPipeReader.ReadAsync( cancellationToken );
+      var result = await reader.ReadAsync( cancellationToken );
       var buffer = result.Buffer;
 
       if ( TryReadLine( buffer.Slice( offset ), out var line, out offset ) )
       {
-        if ( AutoAdvance )
+        if ( autoCommit )
           Commit();
+
         return line;
       }
 
-      HttpPipeReader.AdvanceTo( buffer.Start, buffer.End );
+      reader.AdvanceTo( buffer.Start, buffer.End );
 
       if ( result.IsCompleted )
         return null;
@@ -124,7 +129,7 @@ public class HttpReader( PipeReader HttpPipeReader, bool AutoAdvance = false )
   /// </summary>
   public void Commit()
   {
-    HttpPipeReader.AdvanceTo( offset );
+    reader.AdvanceTo( offset );
   }
 
 
