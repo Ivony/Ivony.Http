@@ -14,9 +14,6 @@ namespace Ivony.Http;
 public class HttpReader( PipeReader HttpPipeReader, bool AutoAdvance = false )
 {
 
-  private static readonly byte CR = (byte) '\r';
-  private static readonly byte LF = (byte) '\n';
-
 
   private SequencePosition offset;
 
@@ -145,11 +142,11 @@ public class HttpReader( PipeReader HttpPipeReader, bool AutoAdvance = false )
 
 
     var reader = new SequenceReader<byte>( buffer );
-    if ( reader.TryReadTo( out ReadOnlySequence<byte> result, CR, LF ) == false )
+    if ( reader.TryReadTo( out ReadOnlySequence<byte> result, HttpProtocalConstant.NewlineBytes.AsSpan(), true ) == false )
       return false;
 
     line = Encoding.ASCII.GetString( result );
-    offset = buffer.GetPosition( buffer.GetOffset( result.End ) + 2 );
+    offset = reader.Position;
     return true;
   }
 
